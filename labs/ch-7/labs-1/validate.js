@@ -13,17 +13,20 @@ const BRAND_SERVICE = join(__dirname, 'brand-service.js')
 
 const timeout = promisify(setTimeout)
 const get = promisify((url, cb) => {
-  const req = http.get(url, (res) => {
-    cb(null, res)
-  }).once('error', (err) => {
-    cb(err)
-  }).once('timeout', () => {
-    const err = Error('timeout')
-    err.code = 'EREQTIMEOUT'
-    err.url = url
-    err.method = 'GET'
-    cb(err)
-  })
+  const req = http
+    .get(url, (res) => {
+      cb(null, res)
+    })
+    .once('error', (err) => {
+      cb(err)
+    })
+    .once('timeout', () => {
+      const err = Error('timeout')
+      err.code = 'EREQTIMEOUT'
+      err.url = url
+      err.method = 'GET'
+      cb(err)
+    })
   req.setTimeout(1500)
 })
 
@@ -33,7 +36,7 @@ const body = async (res) => {
   return Buffer.concat(chunks).toString()
 }
 
-const getPort = promisify(function retry (port, cb) {
+const getPort = promisify(function retry(port, cb) {
   const server = net.createServer()
   server.listen(port, () => {
     server.once('close', () => cb(null, port))
@@ -42,14 +45,16 @@ const getPort = promisify(function retry (port, cb) {
   server.on('error', () => retry(port + 1, cb))
 })
 
-const up = promisify(function retry (port, cb) {
+const up = promisify(function retry(port, cb) {
   if (!up.timeout) {
     up.timeout = setTimeout(() => {
-      cb(new AssertionError({message: 'server did not start in time'}))
+      cb(new AssertionError({ message: 'server did not start in time' }))
     }, 1500).unref()
   }
-  const socket = net.connect(port).unref()
-    .once('error', () => (setTimeout(retry, 300, port, cb).unref()))
+  const socket = net
+    .connect(port)
+    .unref()
+    .once('error', () => setTimeout(retry, 300, port, cb).unref())
     .once('connect', () => {
       clearTimeout(up.timeout)
       socket.end()
@@ -57,7 +62,7 @@ const up = promisify(function retry (port, cb) {
     })
 })
 
-async function system ([p1 = 3000, p2 = 4000, p3 = 5000] = []) {
+async function system([p1 = 3000, p2 = 4000, p3 = 5000] = []) {
   const PORT = await getPort(p1)
   const BOAT_SERVICE_PORT = await getPort(p2)
   const service = (file, PORT) => {
@@ -65,7 +70,9 @@ async function system ([p1 = 3000, p2 = 4000, p3 = 5000] = []) {
       env: { PORT }
     })
     srv.respawn = async () => {
-      try { srv.kill() } catch (e) {}
+      try {
+        srv.kill()
+      } catch (e) {}
       const s2 = service(file, PORT)
       srv.kill = () => s2.kill()
       await up(PORT)
@@ -76,28 +83,32 @@ async function system ([p1 = 3000, p2 = 4000, p3 = 5000] = []) {
   const boatSrv = service(BOAT_SERVICE, BOAT_SERVICE_PORT)
   const BRAND_SERVICE_PORT = await getPort(p3)
   const brandSrv = service(BRAND_SERVICE, BRAND_SERVICE_PORT)
-  const app = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['start'], {
-    cwd: __dirname,
-    stdio: 'inherit',
-    env: { ...process.env, PORT, BOAT_SERVICE_PORT, BRAND_SERVICE_PORT }
-  })
-  function close () {
+  const app = spawn(
+    process.platform === 'win32' ? 'npm.cmd' : 'npm',
+    ['start'],
+    {
+      cwd: __dirname,
+      stdio: 'inherit',
+      env: { ...process.env, PORT, BOAT_SERVICE_PORT, BRAND_SERVICE_PORT }
+    }
+  )
+  function close() {
     app.kill()
     boatSrv.kill()
     brandSrv.kill()
   }
-  try { 
+  try {
     await up(PORT)
     await up(BOAT_SERVICE_PORT)
     await up(BRAND_SERVICE_PORT)
     return { port: PORT, close, boatSrv, brandSrv }
-  } catch (err) { 
+  } catch (err) {
     close()
     throw err
   }
 }
 
-async function start () {
+async function start() {
   await writeFile(BOAT_SERVICE, boatService())
   await writeFile(BRAND_SERVICE, brandService())
   try {
@@ -112,7 +123,7 @@ async function start () {
   }
 }
 
-async function validate ({ port, boatSrv, brandSrv }, retries = 0) {
+async function validate({ port, boatSrv, brandSrv }, retries = 0) {
   let done = false
   let passed = false
   try {
@@ -151,7 +162,7 @@ async function validate ({ port, boatSrv, brandSrv }, retries = 0) {
   }
 }
 
-async function t (validator) {
+async function t(validator) {
   try {
     await validator
   } catch (err) {
@@ -163,7 +174,7 @@ async function t (validator) {
   }
 }
 
-async function ok (port) {
+async function ok(port) {
   const url = `http://localhost:${port}/1`
   const res = await get(url)
   assert.equal(
@@ -184,26 +195,27 @@ async function ok (port) {
   const content = await body(res)
   try {
     const result = JSON.parse(content)
-    assert.deepEqual(result, { id: 1, brand: 'Chaparral', color: 'Red' }, `GET ${url} must respond with correct data\n   got -  ${content})`)
+    assert.deepEqual(
+      result,
+      { id: 1, brand: 'Chaparral', color: 'Red' },
+      `GET ${url} must respond with correct data\n   got -  ${content})`
+    )
     console.log(`☑️  GET ${url} responded with correct data`)
   } catch (err) {
-    if (err instanceof SyntaxError) assert.fail(`GET ${url} response not parsable JSON`)
+    if (err instanceof SyntaxError)
+      assert.fail(`GET ${url} response not parsable JSON`)
     else throw err
   }
 }
 
-async function notFound (port, id) {
+async function notFound(port, id) {
   const url = `http://localhost:${port}/${id}`
   const res = await get(url)
-  assert.equal(
-    res.statusCode,
-    404,
-    `GET ${url} must respond with 404 response`
-  )
+  assert.equal(res.statusCode, 404, `GET ${url} must respond with 404 response`)
   console.log(`☑️  GET ${url} responded with 404 response`)
 }
 
-async function badRequest (port) {
+async function badRequest(port) {
   const url = `http://localhost:${port}/boat`
   const res = await get(url)
 
@@ -215,9 +227,10 @@ async function badRequest (port) {
   console.log(`☑️  GET ${url} responded with 400`)
 }
 
-async function serverError (port, msg) {
+async function serverError(port, msg) {
   const url = `http://localhost:${port}/1`
   const res = await get(url)
+
   assert.equal(
     res.statusCode,
     500,
@@ -228,77 +241,77 @@ async function serverError (port, msg) {
 
 start().catch(console.error)
 
-function boatService () {
+function boatService() {
   return `'use strict'
   const http = require('http')
   const url = require('url')
   const colors = ['Yellow', 'Red', 'Orange', 'Green', 'Blue', 'Indigo']
   const brandIds = [231, 232, 233, 234, 235, 236]
   const MISSING = 2
-  
+
   const server = http.createServer((req, res) => {
     const { pathname } = url.parse(req.url)
     let id = pathname.match(/^\\/(\\d+)$/)
-  
+
     if (!id) {
       res.statusCode = 400
       return void res.end()
     }
-  
+
     id = Number(id[1])
-  
+
     if (id === MISSING) {
       res.statusCode = 404
       return void res.end()
     }
-  
+
     res.setHeader('Content-Type', 'application/json')
-  
+
     res.end(JSON.stringify({
       id: id,
       color: colors[id % colors.length],
       brand: brandIds[id % brandIds.length]
     }))
   })
-  
+
   server.listen(process.env.PORT || 0, () => {
     const { port } = server.address()
     console.log('Boat service listening on localhost on port: ' + port)
-  })   
+  })
 `
 }
-function brandService () {
+function brandService() {
   return `'use strict'
   const http = require('http')
   const url = require('url')
   const brands = [ 'Boston Whaler','Chaparral','Grady-White','Lund','MasterCraft','Sea Ray' ]
-  
+
   const MISSING = 234
-  
+
   const server = http.createServer((req, res) => {
     const { pathname } = url.parse(req.url)
     let id = pathname.match(/^\\/(\\d+)$/)
-  
+
     if (!id) {
       res.statusCode = 400
       return void res.end()
     }
-  
+
     id = Number(id[1])
-  
+
     if (id === MISSING) {
       res.statusCode = 404
       return void res.end()
     }
-  
+
     res.setHeader('Content-Type', 'application/json')
-  
+
     res.end(JSON.stringify({
       id: id,
       name: brands[(id - 231) % brands.length]
     }))
   })
-  
+
   server.listen(process.env.PORT || 0, () => {
     const { port } = server.address()
     console.log('Brand service listening on localhost on port: ' + port)
