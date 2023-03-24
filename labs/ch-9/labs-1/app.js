@@ -6,7 +6,7 @@ const { PORT = 3000 } = process.env
 
 router.get('/', (req, res) => {
   if (Array.isArray(req.query.un)) {
-    return res.status(400).send('Bad Request')
+    return res.send(req.query.un.map((un) => un.toUpperCase()))
   }
 
   setTimeout(() => {
